@@ -7,7 +7,8 @@ from dagster_essentials.defs.partitions import monthly_partition
 from dagster_duckdb import DuckDBResource
 
 @dg.asset(
-        partitions_def=monthly_partition
+        partitions_def=monthly_partition,
+        group_name="raw_files"
 )
 def taxi_trips_file(context: dg.AssetExecutionContext) -> None:
     """
@@ -37,7 +38,8 @@ def taxi_zones_file() -> None:
 
 @dg.asset(
     deps=["taxi_trips_file"],
-    partitions_def=monthly_partition
+    partitions_def=monthly_partition,
+    group_name='ingested'
 )
 def taxi_trips(context: dg.AssetExecutionContext, database: DuckDBResource) -> None:
     """
@@ -76,7 +78,8 @@ def taxi_trips(context: dg.AssetExecutionContext, database: DuckDBResource) -> N
         conn.execute(query)
 
 @dg.asset(
-    deps=["taxi_zones_file"]
+    deps=["taxi_zones_file"],
+    group_name='ingested'
 )
 def taxi_zones(database: DuckDBResource) -> None:
     """
