@@ -1,6 +1,7 @@
 import duckdb
 import os
 import requests
+import pandas as pd
 import dagster as dg
 from dagster_essentials.defs.assets import constants
 from dagster_essentials.defs.partitions import monthly_partition
@@ -10,7 +11,7 @@ from dagster_duckdb import DuckDBResource
         partitions_def=monthly_partition,
         group_name="raw_files"
 )
-def taxi_trips_file(context: dg.AssetExecutionContext) -> None:
+def taxi_trips_file(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
     """
         The raw parquet files for the taxi trips dataset. Sourced from the NYC Open Data portal.
     """
@@ -24,10 +25,21 @@ def taxi_trips_file(context: dg.AssetExecutionContext) -> None:
     with open(constants.TAXI_TRIPS_TEMPLATE_FILE_PATH.format(month_to_fetch), "wb") as output_file:
         output_file.write(raw_trips.content)
 
-@dg.asset
-def taxi_zones_file() -> None:
+    num_rows = len(pd.read_parquet(constants.TAXI_TRIPS_TEMPLATE_FILE_PATH.format(month_to_fetch)))
+
+    return dg.MaterializeResult(
+        metadata={
+            'Number of records': dg.MetadataValue.int(num_rows)
+        }
+    )
+
+@dg.asset(
+        description="The raw CSV file for thet taxi zones dataset, sourced from NYC Open Data portal",
+        group_name="raw_files"
+)
+def taxi_zones_file() -> dg.MaterializeResult:
     """
-        Unique identifier and name for each part of NYC as a district taxi zone
+        Docstrings will not show up in Dagster UI
     """
     raw_zones = requests.get(
         "https://community-engineering-artifacts.s3.us-west-2.amazonaws.com/dagster-university/data/taxi_zones.csv"
@@ -36,10 +48,18 @@ def taxi_zones_file() -> None:
     with open(constants.TAXI_ZONES_FILE_PATH, "wb") as output_file:
         output_file.write(raw_zones.content)
 
+    num_rows = len(pd.read_csv(constants.TAXI_ZONES_FILE_PATH))
+
+    return dg.MaterializeResult(
+        metadata={
+            'Number of records': dg.MetadataValue.int(num_rows)
+        }
+    )
+
 @dg.asset(
     deps=["taxi_trips_file"],
     partitions_def=monthly_partition,
-    group_name='ingested'
+    group_name="ingested"
 )
 def taxi_trips(context: dg.AssetExecutionContext, database: DuckDBResource) -> None:
     """
@@ -79,7 +99,7 @@ def taxi_trips(context: dg.AssetExecutionContext, database: DuckDBResource) -> N
 
 @dg.asset(
     deps=["taxi_zones_file"],
-    group_name='ingested'
+    group_name="ingested"
 )
 def taxi_zones(database: DuckDBResource) -> None:
     """
